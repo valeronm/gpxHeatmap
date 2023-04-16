@@ -12,7 +12,7 @@ import (
 	"os"
 )
 
-const outputDir = "tiles"
+const outputDir = "D:/tiles"
 const tileSize = 256
 const maxZoom = 16
 

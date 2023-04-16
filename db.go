@@ -2,9 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"github.com/golang-migrate/migrate/v4"
-	"github.com/golang-migrate/migrate/v4/database/sqlite3"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "modernc.org/sqlite"
 	"time"
 )
@@ -13,29 +10,45 @@ type Repository struct {
 	db *sql.DB
 }
 
-const migrationsPath = "db/migrations"
 const dbPath = "db/tracks.db"
 
+const migration = `CREATE TABLE IF NOT EXISTS tracks
+(
+    id         INTEGER PRIMARY KEY,
+
+    file_name  TEXT NOT NULL,
+    start_time INT  NOT NULL,
+    end_time   INT  NOT NULL
+);
+
+CREATE TABLE  IF NOT EXISTS track_points
+(
+    id       INTEGER PRIMARY KEY,
+
+    track_id INTEGER NOT NULL,
+    position INTEGER NOT NULL,
+
+    time     INT     NOT NULL,
+    lat      REAL    NOT NULL,
+    lon      REAL    NOT NULL,
+    ele      READ    NOT NULL,
+
+    FOREIGN KEY (track_id)
+        REFERENCES tracks (id)
+        ON DELETE RESTRICT
+);`
+
 func InitRepository() (*Repository, error) {
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		return nil, err
 	}
 
-	driver, err := sqlite3.WithInstance(db, &sqlite3.Config{})
+	_, err = db.Exec(migration)
 	if err != nil {
 		return nil, err
 	}
 
-	m, err := migrate.NewWithDatabaseInstance("file://"+migrationsPath, "sqlite3", driver)
-	if err != nil {
-		return nil, err
-	}
-
-	err = m.Up()
-	if err != nil && err != migrate.ErrNoChange {
-		return nil, err
-	}
 	return &Repository{db}, nil
 }
 

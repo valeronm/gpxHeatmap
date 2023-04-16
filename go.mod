@@ -4,7 +4,6 @@ go 1.20
 
 require (
 	github.com/StephaneBunel/bresenham v0.0.0-20211027152503-ec76d7b8e923
-	github.com/golang-migrate/migrate/v4 v4.15.2
 	github.com/paulmach/orb v0.9.0
 	github.com/tkrajina/gpxgo v1.2.1
 	modernc.org/sqlite v1.21.1
