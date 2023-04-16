@@ -21,44 +21,49 @@ type Segment struct {
 }
 
 type Context struct {
-	repo     *Repository
-	segments []*Segment
+	repo *Repository
 }
 
-func importTracks(folder string, repo *Repository) ([]*Segment, error) {
-	context := &Context{repo, make([]*Segment, 0)}
+func importTracks(folder string, repo *Repository) error {
+	context := &Context{repo}
 	err := filepath.Walk(folder, context.processFile)
 
 	if err != nil {
-		return nil, err
-	} else {
-		return context.segments, nil
+		return err
 	}
+	return nil
 }
 
 func (ctx *Context) processFile(path string, info os.FileInfo, err error) error {
 	if err != nil {
 		return err
 	}
-
 	if info.IsDir() {
 		return nil
 	}
 
 	ext := filepath.Ext(info.Name())
-
 	if ext != ".gpx" {
 		return nil
 	}
 
-	gpxFile, err := gpx.ParseFile(path)
-
+	gpxPath, _ := filepath.Abs(path)
+	trackId, err := ctx.repo.findTrack(filepath.Base(gpxPath))
 	if err != nil {
 		return err
 	}
-	gpxPath, _ := filepath.Abs(path)
+
+	if trackId != 0 {
+		fmt.Print("Skipping file: ", gpxPath, "\n")
+		return nil
+	}
 
 	fmt.Print("Reading file: ", gpxPath, "\n")
+	gpxFile, err := gpx.ParseFile(path)
+	if err != nil {
+		return err
+	}
+
 	firstTrack := gpxFile.Tracks[0]
 	firstSegment := firstTrack.Segments[0]
 	firstPoint := firstSegment.Points[0]
@@ -71,39 +76,31 @@ func (ctx *Context) processFile(path string, info os.FileInfo, err error) error 
 	if err != nil {
 		return err
 	}
-	trackId, err := ctx.repo.upsertTrack(filepath.Base(gpxPath), firstPoint.Timestamp, lastPoint.Timestamp)
+
+	trackId, err = ctx.repo.insertTrack(filepath.Base(gpxPath), firstPoint.Timestamp, lastPoint.Timestamp)
 	if err != nil {
+		ctx.repo.rollback()
 		return err
 	}
 	err = ctx.repo.clearTrack(trackId)
 	if err != nil {
+		ctx.repo.rollback()
 		return err
 	}
 
 	position := 0
 	for _, track := range gpxFile.Tracks {
 		for _, segment := range track.Segments {
-			firstPoint := segment.Points[0]
-			var from = Point{
-				lat: randomize(firstPoint.Latitude, delta),
-				lon: randomize(firstPoint.Longitude, delta),
-			}
-			err := ctx.repo.insertPoint(trackId, position, firstPoint.Timestamp, &from, firstPoint.Elevation.Value())
-			if err != nil {
-				return err
-			}
-			position += 1
-			for _, point := range segment.Points[1:] {
+			for _, point := range segment.Points {
 				to := Point{
 					lat: randomize(point.Latitude, delta),
 					lon: randomize(point.Longitude, delta),
 				}
-				err := ctx.repo.insertPoint(trackId, position, point.Timestamp, &to, point.Elevation.Value())
+				err = ctx.repo.insertPoint(trackId, position, point.Timestamp, &to, point.Elevation.Value())
 				if err != nil {
+					ctx.repo.rollback()
 					return err
 				}
-				ctx.segments = append(ctx.segments, &Segment{from, to})
-				from = to
 				position += 1
 			}
 		}

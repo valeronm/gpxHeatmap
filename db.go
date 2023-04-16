@@ -78,22 +78,6 @@ func (repo *Repository) insertPoint(trackId int, position int, time time.Time, p
 	return nil
 }
 
-func (repo *Repository) upsertTrack(filename string, start time.Time, end time.Time) (int, error) {
-	id, err := repo.findTrack(filename)
-	if err == sql.ErrNoRows {
-		id, err := repo.insertTrack(filename, start, end)
-		if err != nil {
-			return 0, err
-		} else {
-			return id, nil
-		}
-	} else if err == nil {
-		return id, nil
-	} else {
-		return 0, err
-	}
-}
-
 func (repo *Repository) findTrack(filename string) (int, error) {
 	stm, err := repo.db.Prepare("SELECT id FROM tracks WHERE file_name = ?")
 	if err != nil {
@@ -110,6 +94,8 @@ func (repo *Repository) findTrack(filename string) (int, error) {
 	err = row.Scan(&id)
 	if err == nil {
 		return id, nil
+	} else if err == sql.ErrNoRows {
+		return 0, nil
 	} else {
 		return 0, err
 	}
