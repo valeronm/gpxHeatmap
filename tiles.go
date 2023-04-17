@@ -10,17 +10,21 @@ import (
 	"image/png"
 	"math"
 	"os"
+	"runtime"
 )
 
 const outputDir = "D:/tiles"
 const tileSize = 256
+const minZoom = 0
 const maxZoom = 16
+const baseValue = 0
+const alphaBaseValue = 64
 
 type HeatTile [tileSize][tileSize]float64
 
-func buildTiles(segments []*Segment) error {
+func buildTiles(segments *[]*Segment) error {
 	var zoom maptile.Zoom
-	for zoom = 0; zoom <= maxZoom; zoom++ {
+	for zoom = minZoom; zoom <= maxZoom; zoom++ {
 		fmt.Printf("Zoom: %d, Processing segments...\n", zoom)
 
 		heatTiles := processSegments(segments, zoom)
@@ -39,6 +43,7 @@ func buildTiles(segments []*Segment) error {
 		fmt.Printf("Zoom: %d, Maximum: %f\n", zoom, max)
 
 		maxLog := math.Log(max * 10)
+		counter := 0
 		for key, tileHeat := range heatTiles {
 			tile := maptile.FromQuadkey(key, zoom)
 			fmt.Printf("Zoom: %d, Normalizing tile %d, %d\n", zoom, tile.X, tile.Y)
@@ -66,14 +71,20 @@ func buildTiles(segments []*Segment) error {
 			if err != nil {
 				return err
 			}
+
+			if counter == 200 {
+				counter = 0
+				runtime.GC()
+			}
+			counter += 1
 		}
 	}
 	return nil
 }
 
-func processSegments(segments []*Segment, zoom maptile.Zoom) map[uint64]*HeatTile {
+func processSegments(segments *[]*Segment, zoom maptile.Zoom) map[uint64]*HeatTile {
 	heatTiles := make(map[uint64]*HeatTile)
-	for _, segment := range segments {
+	for _, segment := range *segments {
 		fromLat := segment.from.lat
 		fromLon := segment.from.lon
 		var fromPoint = orb.Point{fromLon, fromLat}
@@ -140,11 +151,12 @@ func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.NRGBA {
 		for y := 0; y < tileSize; y++ {
 			heat := tile[x][y]
 			if heat > 0 {
-				pixLog := math.Log(heat * 10)
-				normalized := pixLog / maxLog * 255
+				pix := math.Log(heat*10) / maxLog
+				normalized := baseValue + pix*(255-baseValue)
+				alphaNormalized := alphaBaseValue + pix*(255-alphaBaseValue)
 				intNormalized := uint8(normalized)
 
-				pixColor := color.NRGBA{R: 255 - intNormalized, G: intNormalized, B: 0, A: intNormalized}
+				pixColor := color.NRGBA{R: 255 - intNormalized, G: intNormalized, B: 0, A: uint8(alphaNormalized)}
 				graphic.SetNRGBA(x, y, pixColor)
 			}
 		}

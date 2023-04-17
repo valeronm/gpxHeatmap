@@ -155,7 +155,7 @@ func (repo *Repository) execute(query string) error {
 	return nil
 }
 
-func (repo *Repository) segments() ([]*Segment, error) {
+func (repo *Repository) segments() (*[]*Segment, error) {
 	segments := make([]*Segment, 0)
 	rows, err := repo.db.Query(
 		"SELECT tp1.lat, tp1.lon, tp2.lat, tp2.lon FROM track_points tp1 JOIN track_points tp2 ON tp1.track_id == tp2.track_id AND tp1.position + 1 = tp2.position")
@@ -175,5 +175,5 @@ func (repo *Repository) segments() ([]*Segment, error) {
 		to := Point{lat2, lon2}
 		segments = append(segments, &Segment{from, to})
 	}
-	return segments, nil
+	return &segments, nil
 }
