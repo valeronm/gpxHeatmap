@@ -13,7 +13,6 @@ import (
 	"runtime"
 )
 
-const outputDir = "D:/tiles"
 const tileSize = 256
 const minZoom = 0
 const maxZoom = 16
@@ -22,7 +21,7 @@ const alphaBaseValue = 64
 
 type HeatTile [tileSize][tileSize]float64
 
-func buildTiles(segments *[]*Segment) error {
+func buildTiles(outputDir string, segments *[]*Segment) error {
 	var zoom maptile.Zoom
 	for zoom = minZoom; zoom <= maxZoom; zoom++ {
 		fmt.Printf("Zoom: %d, Processing segments...\n", zoom)

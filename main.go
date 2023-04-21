@@ -2,36 +2,19 @@ package main
 
 import (
 	"flag"
-	"fmt"
 )
 
 func main() {
-	repo, err := InitRepository()
-	panicOnError(err)
+	app := App{}
+	app.repo, app.err = InitRepository()
+	app.checkError()
 
-	defer repo.close()
+	defer app.repo.close()
 
+	app.tracksPath = flag.String("I", "", "Folder with GPX tracks for import")
+	app.tilesPath = flag.String("O", "", "Folder for storing built tiles")
+	app.port = flag.Int("P", 0, "Port for starting server")
 	flag.Parse()
-	args := flag.Args()
-	if len(args) == 1 {
-		gpxFolder := args[0]
-		fmt.Printf("Importing tracks from: %s\n", gpxFolder)
 
-		err := importTracks(gpxFolder, repo)
-		panicOnError(err)
-	} else {
-		fmt.Printf("Building tiles from database\n")
-
-		segments, err := repo.segments()
-		panicOnError(err)
-
-		err = buildTiles(segments)
-		panicOnError(err)
-	}
-}
-
-func panicOnError(err error) {
-	if err != nil {
-		panic(err)
-	}
+	app.execute()
 }
