@@ -17,7 +17,7 @@ const tileSize = 256
 const minZoom = 0
 const maxZoom = 16
 const baseValue = 0
-const alphaBaseValue = 64
+const alphaBaseValue = 0
 
 type HeatTile [tileSize][tileSize]float64
 

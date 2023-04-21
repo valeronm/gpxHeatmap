@@ -8,24 +8,26 @@ import (
 )
 
 type App struct {
-	repo       *Repository
-	err        error
+	repo     *Repository
+	err      error
+	segments *[]*Segment
+
 	tracksPath *string
 	tilesPath  *string
 	port       *int
-	segments   *[]*Segment
+	onlyServe  *bool
 }
 
 var re = regexp.MustCompile(`/tiles/(\d+)/(\d+)/(\d+).png`)
 
 func (a App) execute() {
-	if *a.tracksPath != "" {
+	if *a.tracksPath != "" && !*a.onlyServe {
 		fmt.Printf("Importing tracks from: %s\n", *a.tracksPath)
 
 		a.err = importTracks(*a.tracksPath, a.repo)
 		a.checkError()
 	}
-	if *a.tilesPath != "" && *a.port == 0 {
+	if *a.tilesPath != "" && !*a.onlyServe {
 		fmt.Printf("Building tiles from database into: %s\n", *a.tilesPath)
 
 		a.segments, a.err = a.repo.segments()
