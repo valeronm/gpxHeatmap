@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"regexp"
 	"strconv"
 )
@@ -43,8 +45,8 @@ func (a App) execute() {
 		a.err = http.ListenAndServe(fmt.Sprintf(":%d", *a.port), nil)
 		a.checkError()
 	}
-
 }
+
 func (a App) getRoot(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "public/index.html")
 }
@@ -61,7 +63,12 @@ func (a App) getTile(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 	}
 	filename := fmt.Sprintf("%s/%d/%d/%d.png", *a.tilesPath, zoom, x, y)
-	fmt.Printf("Zoom: %d, x: %d, y: %d, file: %s\n", zoom, x, y, filename)
+
+	if _, err := os.Stat(filename); errors.Is(err, os.ErrNotExist) {
+		filename = fmt.Sprintf("%s/empty.png", *a.tilesPath)
+	}
+
+	fmt.Printf("IP: %s, Zoom: %d, x: %d, y: %d, file: %s\n", r.RemoteAddr, zoom, x, y, filename)
 	http.ServeFile(w, r, filename)
 }
 

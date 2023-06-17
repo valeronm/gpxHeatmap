@@ -7,6 +7,7 @@ import (
 	"github.com/paulmach/orb/maptile"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"math"
 	"os"
@@ -17,7 +18,7 @@ const tileSize = 256
 const minZoom = 0
 const maxZoom = 16
 const baseValue = 0
-const alphaBaseValue = 0
+const alphaBaseValue = 196
 
 type HeatTile [tileSize][tileSize]float64
 
@@ -25,6 +26,24 @@ func buildTiles(outputDir string, segments *[]*Segment) error {
 	var zoom maptile.Zoom
 	for zoom = minZoom; zoom <= maxZoom; zoom++ {
 		fmt.Printf("Zoom: %d, Processing segments...\n", zoom)
+
+		tileImage := emptyTile()
+
+		var name = fmt.Sprintf("%s/empty.png", outputDir)
+		f, err := os.Create(name)
+		if err != nil {
+			return err
+		}
+
+		err = png.Encode(f, tileImage)
+		if err != nil {
+			return err
+		}
+
+		err = f.Close()
+		if err != nil {
+			return err
+		}
 
 		heatTiles := processSegments(segments, zoom)
 
@@ -145,7 +164,7 @@ func processSegments(segments *[]*Segment, zoom maptile.Zoom) map[uint64]*HeatTi
 }
 
 func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.NRGBA {
-	graphic := image.NewNRGBA(image.Rect(0, 0, tileSize, tileSize))
+	graphic := emptyTile()
 	for x := 0; x < tileSize; x++ {
 		for y := 0; y < tileSize; y++ {
 			heat := tile[x][y]
@@ -155,11 +174,17 @@ func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.NRGBA {
 				alphaNormalized := alphaBaseValue + pix*(255-alphaBaseValue)
 				intNormalized := uint8(normalized)
 
-				pixColor := color.NRGBA{R: 255 - intNormalized, G: intNormalized, B: 0, A: uint8(alphaNormalized)}
+				pixColor := color.NRGBA{R: intNormalized, G: 0, B: intNormalized, A: uint8(alphaNormalized)}
 				graphic.SetNRGBA(x, y, pixColor)
 			}
 		}
 	}
+	return graphic
+}
+func emptyTile() *image.NRGBA {
+	graphic := image.NewNRGBA(image.Rect(0, 0, tileSize, tileSize))
+	bg := color.NRGBA{A: alphaBaseValue}
+	draw.Draw(graphic, graphic.Bounds(), &image.Uniform{C: bg}, image.ZP, draw.Src)
 	return graphic
 }
 
