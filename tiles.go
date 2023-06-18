@@ -65,7 +65,7 @@ func buildTiles(outputDir string, segments *[]*Segment) error {
 			tile := maptile.FromQuadkey(key, zoom)
 			fmt.Printf("Zoom: %d, Normalizing tile %d, %d\n", zoom, tile.X, tile.Y)
 
-			tileImage := heatTileToGraphicLog(maxLog, tileHeat)
+			tileImage := heatTileToGraphicLog(int(zoom), maxLog, tileHeat)
 
 			var dirName = fmt.Sprintf("%s/%d/%d", outputDir, zoom, tile.X)
 			err := os.MkdirAll(dirName, os.ModeDir+os.ModePerm)
@@ -162,13 +162,13 @@ func processSegments(segments *[]*Segment, zoom maptile.Zoom) map[uint64]*HeatTi
 	return heatTiles
 }
 
-func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.Gray {
+func heatTileToGraphicLog(zoom int, maxLog float64, tile *HeatTile) *image.Gray {
 	graphic := emptyTile()
 	for x := 0; x < tileSize; x++ {
 		for y := 0; y < tileSize; y++ {
 			heat := tile[x][y]
 			if heat > 0 {
-				pix := math.Log(heat*10) / maxLog
+				pix := math.Log(heat*float64(zoom+1)/2) / maxLog
 				normalized := baseValue + pix*(255-baseValue)
 				intNormalized := uint8(normalized)
 
