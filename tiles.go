@@ -18,7 +18,6 @@ const tileSize = 256
 const minZoom = 0
 const maxZoom = 16
 const baseValue = 0
-const alphaBaseValue = 196
 
 type HeatTile [tileSize][tileSize]float64
 
@@ -163,7 +162,7 @@ func processSegments(segments *[]*Segment, zoom maptile.Zoom) map[uint64]*HeatTi
 	return heatTiles
 }
 
-func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.NRGBA {
+func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.Gray {
 	graphic := emptyTile()
 	for x := 0; x < tileSize; x++ {
 		for y := 0; y < tileSize; y++ {
@@ -171,19 +170,18 @@ func heatTileToGraphicLog(maxLog float64, tile *HeatTile) *image.NRGBA {
 			if heat > 0 {
 				pix := math.Log(heat*10) / maxLog
 				normalized := baseValue + pix*(255-baseValue)
-				alphaNormalized := alphaBaseValue + pix*(255-alphaBaseValue)
 				intNormalized := uint8(normalized)
 
-				pixColor := color.NRGBA{R: intNormalized, G: 0, B: intNormalized, A: uint8(alphaNormalized)}
-				graphic.SetNRGBA(x, y, pixColor)
+				pixColor := color.Gray{Y: intNormalized}
+				graphic.SetGray(x, y, pixColor)
 			}
 		}
 	}
 	return graphic
 }
-func emptyTile() *image.NRGBA {
-	graphic := image.NewNRGBA(image.Rect(0, 0, tileSize, tileSize))
-	bg := color.NRGBA{A: alphaBaseValue}
+func emptyTile() *image.Gray {
+	graphic := image.NewGray(image.Rect(0, 0, tileSize, tileSize))
+	bg := color.Gray{}
 	draw.Draw(graphic, graphic.Bounds(), &image.Uniform{C: bg}, image.ZP, draw.Src)
 	return graphic
 }

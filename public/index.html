@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Title</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css"
           integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI="
           crossorigin=""/>
     <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"
@@ -13,15 +14,39 @@
 <body>
 <div id="map" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0"></div>
 <script type="application/javascript">
-    var map = L.map('map').setView([0.0, 0.0], 1);
+    const searchParams = new URLSearchParams(window.location.hash.substring(1));
+    const lat = searchParams.get('lat') || 0
+    const lng = searchParams.get('lng') || 0
+    const zoom = searchParams.get('zoom') || 3
+
+    const map = L.map('map').setView([lat, lng], zoom);
+
+    function storeMapState() {
+        const zoom = map.getZoom()
+        const center = map.getCenter()
+
+        const searchParams = new URLSearchParams();
+        searchParams.set('zoom', zoom)
+        searchParams.set('lat', center.lat)
+        searchParams.set('lng', center.lng)
+
+        window.location.hash = searchParams.toString();
+    }
+
+    map.on("zoomend", storeMapState)
+    map.on("moveend", storeMapState)
+
     L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        minZoom: 3,
         maxZoom: 19,
         maxNativeZoom: 19,
-        opacity: 0.5,
+        opacity: 0.8,
         attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
     }).addTo(map);
     L.tileLayer('/tiles/{z}/{x}/{y}.png', {
+        minZoom: 3,
         maxZoom: 19,
+        opacity: 0.85,
         maxNativeZoom: 16,
     }).addTo(map);
 </script>

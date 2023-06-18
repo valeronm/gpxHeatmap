@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	_ "modernc.org/sqlite"
 	"time"
 )
@@ -35,6 +36,25 @@ CREATE TABLE  IF NOT EXISTS track_points
 
     FOREIGN KEY (track_id)
         REFERENCES tracks (id)
+        ON DELETE RESTRICT
+);
+
+CREATE TABLE  IF NOT EXISTS track_segments
+(
+    id       INTEGER PRIMARY KEY,
+
+    track_id INTEGER NOT NULL,
+    start_point_id INTEGER NOT NULL,
+    end_point_id INTEGER NOT NULL,
+
+    length REAL NOT NULL,
+    velocity REAL NOT NULL,
+
+    FOREIGN KEY (start_point_id)
+        REFERENCES track_points (id)
+        ON DELETE RESTRICT
+    FOREIGN KEY (end_point_id)
+        REFERENCES track_points (id)
         ON DELETE RESTRICT
 );`
 
@@ -72,22 +92,62 @@ func (repo *Repository) clearTrack(trackId int) error {
 	if err != nil {
 		return err
 	}
-	return nil
-}
 
-func (repo *Repository) insertPoint(trackId int, position int, time time.Time, p *Point, ele float64) error {
-	stm, err := repo.db.Prepare(
-		"INSERT INTO track_points (track_id, position, lat, lon, time, ele) VALUES (?, ?, ?, ?, ?, ?)")
+	stm, err = repo.db.Prepare("DELETE FROM track_segments WHERE track_id = ?")
 	if err != nil {
 		return err
 	}
 	defer stm.Close()
 
-	_, err = stm.Exec(trackId, position, p.lat, p.lon, time.Unix(), ele)
+	_, err = stm.Exec(trackId)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (repo *Repository) insertPoint(trackId int, position int, time time.Time, p *Point, ele float64) (int, error) {
+	stm, err := repo.db.Prepare(
+		"INSERT INTO track_points (track_id, position, lat, lon, time, ele) VALUES (?, ?, ?, ?, ?, ?)  RETURNING id")
+	if err != nil {
+		return 0, err
+	}
+	defer stm.Close()
+
+	row := stm.QueryRow(trackId, position, p.lat, p.lon, time.Unix(), ele)
+	if row.Err() != nil {
+		return 0, row.Err()
+	}
+
+	id := 0
+	err = row.Scan(&id)
+	if err == nil {
+		return id, nil
+	} else {
+		return 0, err
+	}
+}
+
+func (repo *Repository) insertSegment(trackId int, startPointId int, endPointId int, length float64, velocity float64) (int, error) {
+	stm, err := repo.db.Prepare(
+		"INSERT INTO track_segments (track_id, start_point_id, end_point_id, length, velocity) VALUES (?, ?, ?, ?, ?)  RETURNING id")
+	if err != nil {
+		return 0, err
+	}
+	defer stm.Close()
+
+	row := stm.QueryRow(trackId, startPointId, endPointId, length, velocity)
+	if row.Err() != nil {
+		return 0, row.Err()
+	}
+
+	id := 0
+	err = row.Scan(&id)
+	if err == nil {
+		return id, nil
+	} else {
+		return 0, err
+	}
 }
 
 func (repo *Repository) findTrack(filename string) (int, error) {
@@ -106,7 +166,7 @@ func (repo *Repository) findTrack(filename string) (int, error) {
 	err = row.Scan(&id)
 	if err == nil {
 		return id, nil
-	} else if err == sql.ErrNoRows {
+	} else if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	} else {
 		return 0, err
@@ -158,7 +218,14 @@ func (repo *Repository) execute(query string) error {
 func (repo *Repository) segments() (*[]*Segment, error) {
 	segments := make([]*Segment, 0)
 	rows, err := repo.db.Query(
-		"SELECT tp1.lat, tp1.lon, tp2.lat, tp2.lon FROM track_points tp1 JOIN track_points tp2 ON tp1.track_id == tp2.track_id AND tp1.position + 1 = tp2.position")
+		`
+SELECT 
+    tp1.lat, tp1.lon, tp2.lat, tp2.lon
+FROM track_segments ts
+JOIN track_points tp1 ON ts.start_point_id = tp1.id
+JOIN track_points tp2 ON ts.end_point_id = tp2.id
+WHERE length > 0 and velocity >=2 and velocity <= 50;
+`)
 	if err != nil {
 		return nil, err
 	}
