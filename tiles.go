@@ -10,6 +10,7 @@ import (
 	"image/draw"
 	"image/png"
 	"math"
+	"math/rand"
 	"os"
 	"runtime"
 )
@@ -20,31 +21,19 @@ const maxZoom = 16
 const baseValue = 0
 
 type HeatTile [tileSize][tileSize]float64
+type HeatTileSet map[uint64]*HeatTile
+type ZoomHeatTileSet map[int]*HeatTileSet
 
-func buildTiles(outputDir string, segments *[]*Segment) error {
-	var zoom maptile.Zoom
-	for zoom = minZoom; zoom <= maxZoom; zoom++ {
+func buildTiles(outputDir string, segments *Segments) error {
+	err := buildEmptyTile(outputDir)
+	if err != nil {
+		return err
+	}
+
+	for zoom := minZoom; zoom <= maxZoom; zoom++ {
 		fmt.Printf("Zoom: %d, Processing segments...\n", zoom)
 
-		tileImage := emptyTile()
-
-		var name = fmt.Sprintf("%s/empty.png", outputDir)
-		f, err := os.Create(name)
-		if err != nil {
-			return err
-		}
-
-		err = png.Encode(f, tileImage)
-		if err != nil {
-			return err
-		}
-
-		err = f.Close()
-		if err != nil {
-			return err
-		}
-
-		heatTiles := processSegments(segments, zoom)
+		heatTiles := processSegments(segments, maptile.Zoom(zoom))
 
 		fmt.Printf("Zoom: %d, Searching maximum...\n", zoom)
 		var max float64 = 0
@@ -62,7 +51,7 @@ func buildTiles(outputDir string, segments *[]*Segment) error {
 		maxLog := math.Log(max * 10)
 		counter := 0
 		for key, tileHeat := range heatTiles {
-			tile := maptile.FromQuadkey(key, zoom)
+			tile := maptile.FromQuadkey(key, maptile.Zoom(zoom))
 			fmt.Printf("Zoom: %d, Normalizing tile %d, %d\n", zoom, tile.X, tile.Y)
 
 			tileImage := heatTileToGraphicLog(int(zoom), maxLog, tileHeat)
@@ -99,16 +88,103 @@ func buildTiles(outputDir string, segments *[]*Segment) error {
 	return nil
 }
 
-func processSegments(segments *[]*Segment, zoom maptile.Zoom) map[uint64]*HeatTile {
-	heatTiles := make(map[uint64]*HeatTile)
+func toPoint(p orb.Point) *Point {
+	return &Point{lat: p.Lat(), lon: p.Lon()}
+}
+
+func (a App) buildTile(outputDir string, zoom int, x int, y int) error {
+	mapTile := maptile.New(uint32(x), uint32(y), maptile.Zoom(zoom))
+	bound := mapTile.Bound()
+
+	segments, err := a.repo.segmentsForRange(toPoint(bound.Min), toPoint(bound.Max))
+	if err != nil {
+		return err
+	}
+
+	if len(*segments) == 0 {
+		return nil
+	}
+
+	fmt.Printf("Drawing %d segments...\n", len(*segments))
+	heatTiles := processSegments(segments, maptile.Zoom(zoom))
+	heatTile := heatTiles[mapTile.Quadkey()]
+
+	if heatTile == nil {
+		return nil
+	}
+
+	fmt.Printf("Searching tile maximum...\n")
+	var max float64 = 0
+	for x := 0; x < tileSize; x++ {
+		for y := 0; y < tileSize; y++ {
+			if max < heatTile[x][y] {
+				max = heatTile[x][y]
+			}
+		}
+	}
+	fmt.Printf("Maximum: %f\n", max)
+
+	fmt.Printf("Normalizing tile\n")
+	maxLog := math.Log(max * 10)
+	tileImage := heatTileToGraphicLog(zoom, maxLog, heatTile)
+
+	var dirName = fmt.Sprintf("%s/%d/%d", outputDir, zoom, x)
+	err = os.MkdirAll(dirName, os.ModeDir+os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	var name = fmt.Sprintf("%s/%d/%d/%d.png", outputDir, zoom, x, y)
+	f, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+
+	err = png.Encode(f, tileImage)
+	if err != nil {
+		return err
+	}
+
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func buildEmptyTile(outputDir string) error {
+	tileImage := emptyTile()
+
+	var name = fmt.Sprintf("%s/empty.png", outputDir)
+	f, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+
+	err = png.Encode(f, tileImage)
+	if err != nil {
+		return err
+	}
+
+	err = f.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+const random = 0.00002
+
+func processSegments(segments *Segments, zoom maptile.Zoom) HeatTileSet {
+	heatTiles := make(HeatTileSet)
 	for _, segment := range *segments {
-		fromLat := segment.from.lat
-		fromLon := segment.from.lon
+		fromLat := segment.from.lat + (rand.Float64() * random * 2) - random
+		fromLon := segment.from.lon + (rand.Float64() * random * 2) - random
 		var fromPoint = orb.Point{fromLon, fromLat}
 		var fromTile = maptile.At(fromPoint, zoom)
 
-		toLat := segment.to.lat
-		toLon := segment.to.lon
+		toLat := segment.to.lat + (rand.Float64() * random * 2) - random
+		toLon := segment.to.lon + (rand.Float64() * random * 2) - random
 		var toPoint = orb.Point{toLon, toLat}
 		var toTile = maptile.At(toPoint, zoom)
 
@@ -179,6 +255,7 @@ func heatTileToGraphicLog(zoom int, maxLog float64, tile *HeatTile) *image.Gray 
 	}
 	return graphic
 }
+
 func emptyTile() *image.Gray {
 	graphic := image.NewGray(image.Rect(0, 0, tileSize, tileSize))
 	bg := color.Gray{}

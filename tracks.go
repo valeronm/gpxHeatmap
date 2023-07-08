@@ -19,6 +19,8 @@ type Segment struct {
 	to   Point
 }
 
+type Segments []*Segment
+
 type Context struct {
 	repo *Repository
 }

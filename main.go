@@ -18,6 +18,4 @@ func main() {
 	flag.Parse()
 
 	app.execute()
-
-	flag.Usage()
 }

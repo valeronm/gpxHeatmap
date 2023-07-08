@@ -13,10 +13,10 @@ type Repository struct {
 
 const dbPath = "db/tracks.db"
 
-const migration = `CREATE TABLE IF NOT EXISTS tracks
+const migration = `
+CREATE TABLE IF NOT EXISTS tracks
 (
     id         INTEGER PRIMARY KEY,
-
     file_name  TEXT NOT NULL,
     start_time INT  NOT NULL,
     end_time   INT  NOT NULL
@@ -25,10 +25,8 @@ const migration = `CREATE TABLE IF NOT EXISTS tracks
 CREATE TABLE  IF NOT EXISTS track_points
 (
     id       INTEGER PRIMARY KEY,
-
     track_id INTEGER NOT NULL,
     position INTEGER NOT NULL,
-
     time     INT     NOT NULL,
     lat      REAL    NOT NULL,
     lon      REAL    NOT NULL,
@@ -56,7 +54,9 @@ CREATE TABLE  IF NOT EXISTS track_segments
     FOREIGN KEY (end_point_id)
         REFERENCES track_points (id)
         ON DELETE RESTRICT
-);`
+);
+CREATE INDEX IF NOT EXISTS idx_lat_lon ON track_points (lat, lon);
+`
 
 func InitRepository() (*Repository, error) {
 	db, err := sql.Open("sqlite", dbPath)
@@ -215,8 +215,8 @@ func (repo *Repository) execute(query string) error {
 	return nil
 }
 
-func (repo *Repository) segments() (*[]*Segment, error) {
-	segments := make([]*Segment, 0)
+func (repo *Repository) segments() (*Segments, error) {
+	segments := make(Segments, 0)
 	rows, err := repo.db.Query(
 		`
 SELECT 
@@ -226,6 +226,40 @@ JOIN track_points tp1 ON ts.start_point_id = tp1.id
 JOIN track_points tp2 ON ts.end_point_id = tp2.id
 WHERE length > 0 and velocity >=2 and velocity <= 50;
 `)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var lat1, lat2, lon1, lon2 float64
+
+	for rows.Next() {
+		err = rows.Scan(&lat1, &lon1, &lat2, &lon2)
+		if err != nil {
+			return nil, err
+		}
+		from := Point{lat1, lon1}
+		to := Point{lat2, lon2}
+		segments = append(segments, &Segment{from, to})
+	}
+	return &segments, nil
+}
+
+func (repo *Repository) segmentsForRange(min *Point, max *Point) (*Segments, error) {
+	segments := make(Segments, 0)
+
+	rows, err := repo.db.Query(
+		`
+				SELECT 
+					stp.lat, stp.lon, etp.lat, etp.lon
+				FROM track_segments ts
+				JOIN track_points stp ON ts.start_point_id = stp.id
+				JOIN track_points etp ON ts.end_point_id = etp.id
+				WHERE length > 0 and velocity >=2 and velocity <= 50
+				AND (stp.lat >= ? OR etp.lat >= ?) AND (stp.lat <= ? OR etp.lat <= ?) 
+				AND (stp.lon >= ? OR etp.lon >= ?) AND (stp.lon <= ? OR etp.lon <= ?);
+				`,
+		min.lat, min.lat, max.lat, max.lat, min.lon, min.lon, max.lon, max.lon)
 	if err != nil {
 		return nil, err
 	}

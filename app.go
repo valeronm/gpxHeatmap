@@ -10,9 +10,10 @@ import (
 )
 
 type App struct {
-	repo     *Repository
-	err      error
-	segments *[]*Segment
+	repo      *Repository
+	err       error
+	segments  *Segments
+	heatTiles *ZoomHeatTileSet
 
 	tracksPath *string
 	tilesPath  *string
